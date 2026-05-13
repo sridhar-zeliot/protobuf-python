@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package car;
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+message Car {
+  string carId = 1;
+  string carName = 2;
+  double speed = 3;
+  int32 fuelLevel = 4;
+  bool headlight = 5;
+  double engineTemp = 6;
+  Location location = 7;
+}
