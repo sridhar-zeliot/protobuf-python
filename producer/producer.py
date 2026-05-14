@@ -2,6 +2,8 @@ from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
 from confluent_kafka.serialization import StringSerializer
+import sys
+sys.path.append("/app/generated")
 
 import car_pb2
 
