@@ -1,11 +1,22 @@
+import random
+import time
+import os
+import sys
+
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
 from confluent_kafka.serialization import StringSerializer
-import sys
-sys.path.append("/app/generated")
 
+sys.path.append("/app/generated")
 import car_pb2
+
+# -----------------------------
+# ENV CONFIG
+# -----------------------------
+CAR_ID_MIN = int(os.getenv("CAR_ID_MIN", 1))
+CAR_ID_MAX = int(os.getenv("CAR_ID_MAX", 15))
+INTERVAL_MS = int(os.getenv("SCHEDULE_INTERVAL_MS", 10000))
 
 # -----------------------------
 # Schema Registry config
@@ -17,7 +28,6 @@ schema_registry_conf = {
 
 schema_registry_client = SchemaRegistryClient(schema_registry_conf)
 
-# Protobuf serializer
 protobuf_serializer = ProtobufSerializer(
     car_pb2.Car,
     schema_registry_client
@@ -41,28 +51,61 @@ producer = SerializingProducer(producer_conf)
 topic = "car-nested-protobuf-topic"
 
 # -----------------------------
-# Build Protobuf message
+# Delivery Callback
 # -----------------------------
-car = car_pb2.Car()
-car.carId = "CAR-100"
-car.carName = "Tesla Model X"
-car.speed = 120.5
-car.fuelLevel = 80
-car.headlight = True
-car.engineTemp = 75.2
-
-car.location.latitude = 12.9716
-car.location.longitude = 77.5946
+def delivery_report(err, msg):
+    if err:
+        print(f"❌ Delivery failed: {err}")
+    else:
+        print(f"✅ Delivered to {msg.topic()} [{msg.partition()}] offset {msg.offset()}")
 
 # -----------------------------
-# Produce
+# Generate Car डेटा
 # -----------------------------
-producer.produce(
-    topic=topic,
-    key=car.carId,
-    value=car
-)
+def generate_car():
+    car = car_pb2.Car()
 
-producer.flush()
+    # carId from range
+    car_id = random.randint(CAR_ID_MIN, CAR_ID_MAX)
+    car.carId = str(car_id)
 
-print("✅ Message sent successfully")
+    # carName = KA07JB + last 2 digits
+    car.carName = f"KA07JB{car_id:02d}"
+
+    # Random values
+    car.speed = random.uniform(40, 160)
+    car.fuelLevel = random.randint(0, 100)
+    car.headlight = random.choice([True, False])
+    car.engineTemp = random.uniform(70, 110)
+
+    car.location.latitude = random.uniform(-90, 90)
+    car.location.longitude = random.uniform(-180, 180)
+
+    return car
+
+# -----------------------------
+# Scheduler Loop
+# -----------------------------
+try:
+    while True:
+        car = generate_car()
+
+        producer.produce(
+            topic=topic,
+            key=car.carId,
+            value=car,
+            on_delivery=delivery_report
+        )
+
+        # Important: non-blocking
+        producer.poll(0)
+
+        print(f"🚗 Sent: carId={car.carId}, carName={car.carName}")
+
+        time.sleep(INTERVAL_MS / 1000)
+
+except KeyboardInterrupt:
+    print("🛑 Stopping producer...")
+
+finally:
+    producer.flush()
